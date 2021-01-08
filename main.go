@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	apps_v1 "k8s.io/api/apps/v1"
 	api_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"os"
 	"os/signal"
 	"syscall"
@@ -25,7 +25,7 @@ import (
 var serverStartTime time.Time
 
 func main() {
-	logrus.Info("Execute")
+	klog.Info("Execute")
 	Execute()
 }
 
@@ -54,7 +54,7 @@ func Execute() {
 	)
 
 	c := NewController(kubeClient, informer)
-	logrus.Infof("run controller: %v", informer)
+	klog.Infof("run controller: %v", informer)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -67,27 +67,35 @@ func Execute() {
 }
 
 type Controller struct {
-	//logger   *logrus.Entry
 	client   kubernetes.Interface
 	informer cache.SharedIndexInformer
 	queue    workqueue.RateLimitingInterface
 }
 
 func NewController(client kubernetes.Interface, informer cache.SharedIndexInformer) *Controller {
-	logrus.Info("NewController")
+	klog.Info("NewController")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// getting access to primitives
+	nodes, err := client.CoreV1().Nodes().List(ctx, meta_v1.ListOptions{})
+	if err != nil {
+		klog.Error(err)
+	}
+	klog.Infof("nodes: %+v", nodes)
 
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
-			logrus.Infof("processing add key: %v", key)
+			klog.Infof("processing add key: %v", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(oldObj)
-			logrus.Infof("processing update key: %v", key)
+			klog.Infof("processing update key: %v", key)
 			if err == nil {
 				queue.Add(key)
 			}
@@ -95,9 +103,9 @@ func NewController(client kubernetes.Interface, informer cache.SharedIndexInform
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err != nil {
-				logrus.Error(err)
+				klog.Error(err)
 			}
-			logrus.Infof("ignore delete key: %v", key)
+			klog.Infof("ignore delete key: %v", key)
 		},
 	})
 
@@ -111,12 +119,12 @@ func NewController(client kubernetes.Interface, informer cache.SharedIndexInform
 func GetClientOutOfCluster() kubernetes.Interface {
 	config, err := buildOutOfClusterConfig()
 	if err != nil {
-		logrus.Fatalf("can not get kubernetes config: %v", err)
+		klog.Fatalf("can not get kubernetes config: %v", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		logrus.Fatalf("can not get kubernetes config: %v", err)
+		klog.Fatalf("can not get kubernetes config: %v", err)
 	}
 	return clientset
 }
@@ -132,12 +140,12 @@ func buildOutOfClusterConfig() (*rest.Config, error) {
 func GetClient() kubernetes.Interface {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		logrus.Fatalf("can not get kubernetes config: %v", err)
+		klog.Fatalf("can not get kubernetes config: %v", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		logrus.Fatalf("can not get kubernetes config: %v", err)
+		klog.Fatalf("can not get kubernetes config: %v", err)
 	}
 	return clientset
 }
@@ -147,7 +155,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	logrus.Info("Starting sensitive manager controller")
+	klog.Info("Starting sensitive manager controller")
 	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
@@ -157,9 +165,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	logrus.Infof("Controller synced and ready: %v", serverStartTime)
+	klog.Infof("Controller synced and ready: %v", serverStartTime)
 	wait.Until(c.runWorker, time.Second, stopCh)
-	logrus.Info("stopping pod controller")
+	klog.Info("stopping pod controller")
 }
 
 func (c *Controller) HasSynced() bool {
@@ -180,7 +188,7 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(key)
 	err := c.processItem(key.(string))
 	if err != nil {
-		logrus.Errorf("Error processing %v", key)
+		klog.Errorf("Error processing %v", key)
 		utilruntime.HandleError(err)
 	}
 
@@ -192,7 +200,7 @@ func (c *Controller) processItem(key string) error {
 	if err != nil {
 		return fmt.Errorf("error fetching object with key %s from store: %v", key, err)
 	}
-	logrus.Infof("got obj metadata: %v", obj.(*apps_v1.Deployment).GetLabels())
+	klog.Infof("got obj metadata: %v", obj.(*apps_v1.Deployment).GetLabels())
 
 	return nil
 }
