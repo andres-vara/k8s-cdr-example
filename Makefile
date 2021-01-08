@@ -32,6 +32,9 @@ fmt:
 docker-build:
 	docker build . -t ${NAME}:${VERSION} && kind load docker-image ${NAME}:${VERSION} --name mw
 
+start-pod:
+	kubectl apply -f config/controller/controller.yml
+
 refresh-pod:
 	kubectl delete pod manager && kubectl apply -f config/controller/controller.yml
 
