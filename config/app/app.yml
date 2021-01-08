@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sensitive-app
+  lavels:
+    dazn.com/min-containerd-version: "v1.4"
+    dazn.com/min-kubelet-version: "v1.18"
+    dazn.com/no-sensitive-mount: "true"
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: random-generator
+        image: k8spatterns/random-generator:1.0

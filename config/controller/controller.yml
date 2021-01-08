@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manager
+  namespace: default
+spec:
+  containers:
+  - name: manager
+    image: controller:latest
+    imagePullPolicy: IfNotPresent
+#    command:
+#      - /main
