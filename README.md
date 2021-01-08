@@ -1,1 +1,1 @@
-This repo contains an example of CRD 
+This repo contains a draft example of k8s CRD 
