@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: random-generator
+  labels:
+    mwam.com/min-containerd-version: "v1.4"
+    mwam.com/min-kubelet-version: "v1.18"
+    mwam.com/no-sensitive-mount: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Number of pods which can be run temporarily in addition the replicas
+      # specified during an update
+      # (so it could be 4 in this case at max)
+      maxSurge: 1
+      # Number of Pods which can be unavailable during the update. Here it
+      # could be only 2 Pods are running at a time during the update
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: random-generator
+  template:
+    metadata:
+      labels:
+        app: random-generator
+    spec:
+      containers:
+      - image: k8spatterns/random-generator:1.0
+        name: random-generator
+        env:
+        - name: PATTERN
+          value: Declarative Deployment
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        # Readiness probes are very important for a RollingUpdate to work properly
+        # so dont forgate them
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 15
+        readinessProbe:
+          exec:
+            command: ["start", "/opt/random-generator-ready"]

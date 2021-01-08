@@ -35,6 +35,9 @@ docker-build:
 start-pod:
 	kubectl apply -f config/controller/controller.yml
 
-refresh-pod:
+refresh-pod: docker-build
 	kubectl delete pod manager && kubectl apply -f config/controller/controller.yml
+
+refresh-deployment:
+	kubectl delete -f config/test/deployment.yaml && kubectl apply -f config/test/deployment.yaml
 

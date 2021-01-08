@@ -54,7 +54,7 @@ func Execute() {
 	)
 
 	c := NewController(kubeClient, informer)
-	c.logger.Infof("run controller: %v", informer)
+	logrus.Infof("run controller: %v", informer)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -67,7 +67,7 @@ func Execute() {
 }
 
 type Controller struct {
-	logger   logrus.FieldLogger
+	//logger   *logrus.Entry
 	client   kubernetes.Interface
 	informer cache.SharedIndexInformer
 	queue    workqueue.RateLimitingInterface
@@ -79,14 +79,14 @@ func NewController(client kubernetes.Interface, informer cache.SharedIndexInform
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceIndexFunc(obj)
+			key, err := cache.MetaNamespaceKeyFunc(obj)
 			logrus.Infof("processing add key: %v", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			key, err := cache.MetaNamespaceIndexFunc(newObj)
+			key, err := cache.MetaNamespaceKeyFunc(oldObj)
 			logrus.Infof("processing update key: %v", key)
 			if err == nil {
 				queue.Add(key)
@@ -94,15 +94,14 @@ func NewController(client kubernetes.Interface, informer cache.SharedIndexInform
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			logrus.Infof("processing delete key: %v", key)
-			if err == nil {
-				queue.Add(key)
+			if err != nil {
+				logrus.Error(err)
 			}
+			logrus.Infof("ignore delete key: %v", key)
 		},
 	})
 
 	return &Controller{
-		logger: logrus.NewEntry(&logrus.Logger{}),
 		client: client,
 		queue:  queue,
 		informer: informer,
@@ -148,7 +147,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	c.logger.Info("Starting sensitive manager controller")
+	logrus.Info("Starting sensitive manager controller")
 	serverStartTime = time.Now().Local()
 
 	go c.informer.Run(stopCh)
@@ -158,9 +157,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	c.logger.Infof("Controller synced and ready: %v", serverStartTime)
+	logrus.Infof("Controller synced and ready: %v", serverStartTime)
 	wait.Until(c.runWorker, time.Second, stopCh)
-	c.logger.Info("stopping pod controller")
+	logrus.Info("stopping pod controller")
 }
 
 func (c *Controller) HasSynced() bool {
@@ -181,7 +180,7 @@ func (c *Controller) processNextItem() bool {
 	defer c.queue.Done(key)
 	err := c.processItem(key.(string))
 	if err != nil {
-		c.logger.Errorf("Error processing %v", key)
+		logrus.Errorf("Error processing %v", key)
 		utilruntime.HandleError(err)
 	}
 
@@ -193,8 +192,7 @@ func (c *Controller) processItem(key string) error {
 	if err != nil {
 		return fmt.Errorf("error fetching object with key %s from store: %v", key, err)
 	}
-	c.logger.Infof("got obj: %v", obj)
-	//obj.(*apps_v1.Deployment).GetObjectMeta()
+	logrus.Infof("got obj metadata: %v", obj.(*apps_v1.Deployment).GetLabels())
 
 	return nil
 }
